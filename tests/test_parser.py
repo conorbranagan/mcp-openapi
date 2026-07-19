@@ -338,6 +338,18 @@ def weather_api_spec():
                             },
                             "description": "Time format",
                         },
+                        {
+                            "name": "include_current",
+                            "in": "query",
+                            "schema": {"type": "boolean", "default": False},
+                            "description": "Include current conditions",
+                        },
+                        {
+                            "name": "offset_days",
+                            "in": "query",
+                            "schema": {"type": "integer", "default": 0},
+                            "description": "Forecast offset in days",
+                        },
                     ],
                     "responses": {
                         "200": {
@@ -724,6 +736,118 @@ def test_request_response_processing(tmp_path, sample_openapi_spec):
     assert {p.name for p in response_schema.properties} == {"id", "name"}
 
 
+def test_xquik_search_openapi_31_fixture(tmp_path):
+    xquik_spec = {
+        "openapi": "3.1.0",
+        "info": {
+            "title": "Xquik API",
+            "version": "1.0",
+            "description": 'Xquik is an independent third-party service. Not affiliated with X Corp. "Twitter" and "X" are trademarks of X Corp.',
+        },
+        "servers": [{"url": "https://xquik.com"}],
+        "paths": {
+            "/api/v1/x/tweets/search": {
+                "get": {
+                    "operationId": "searchTweets",
+                    "summary": "Search tweets by query, Tweet ID, X status URL, or account date window",
+                    "parameters": [
+                        {
+                            "name": "q",
+                            "in": "query",
+                            "required": True,
+                            "schema": {"type": "string"},
+                        },
+                        {
+                            "name": "queryType",
+                            "in": "query",
+                            "schema": {
+                                "type": "string",
+                                "enum": ["Latest", "Top"],
+                                "default": "Latest",
+                            },
+                        },
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "schema": {
+                                "type": "integer",
+                                "default": 20,
+                                "maximum": 200,
+                            },
+                        },
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Search results",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "tweets": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "id": {"type": "string"},
+                                                        "text": {"type": "string"},
+                                                    },
+                                                },
+                                            },
+                                            "has_next_page": {"type": "boolean"},
+                                            "next_cursor": {"type": "string"},
+                                        },
+                                    }
+                                }
+                            },
+                        }
+                    },
+                }
+            }
+        },
+    }
+
+    spec_file = tmp_path / "xquik-openapi.json"
+    with open(spec_file, "w") as f:
+        json.dump(xquik_spec, f)
+
+    spec = Spec.from_file(
+        str(spec_file),
+        [r"/api/v1/x/tweets/search$"],
+        base_path=tmp_path,
+        use_cache=False,
+    )
+
+    assert len(spec.paths) == 1
+    assert spec.paths[0].path == "/api/v1/x/tweets/search"
+
+    get_op = spec.paths[0].get
+    assert get_op.id == "searchTweets"
+    assert (
+        get_op.summary
+        == "Search tweets by query, Tweet ID, X status URL, or account date window"
+    )
+    assert {p.name for p in get_op.parameters} == {"q", "queryType", "limit"}
+    assert next(p for p in get_op.parameters if p.name == "q").required is True
+    assert next(p for p in get_op.parameters if p.name == "queryType").enum == [
+        "Latest",
+        "Top",
+    ]
+    assert next(p for p in get_op.parameters if p.name == "queryType").required is False
+    assert (
+        next(p for p in get_op.parameters if p.name == "queryType").default == "Latest"
+    )
+    assert next(p for p in get_op.parameters if p.name == "limit").default == 20
+
+    response = get_op.responses["200"]
+    assert response.format == "application/json"
+    assert {p.name for p in response.schema_.properties} == {
+        "tweets",
+        "has_next_page",
+        "next_cursor",
+    }
+
+
 def test_multiple_path_patterns(tmp_path, sample_openapi_spec):
     spec_file = tmp_path / "openapi.json"
     with open(spec_file, "w") as f:
@@ -848,7 +972,7 @@ def test_parameter_enums_and_defaults(tmp_path, weather_api_spec):
 
     # Test GET operation parameters
     get_op = path.get
-    assert len(get_op.parameters) == 3
+    assert len(get_op.parameters) == 5
 
     # Test temperature_unit parameter
     temp_param = next(p for p in get_op.parameters if p.name == "temperature_unit")
@@ -867,6 +991,14 @@ def test_parameter_enums_and_defaults(tmp_path, weather_api_spec):
     assert time_param.type == "string"
     assert time_param.enum == ["iso8601", "unixtime"]
     assert time_param.default == "iso8601"
+
+    include_current = next(p for p in get_op.parameters if p.name == "include_current")
+    assert include_current.required is False
+    assert include_current.default is False
+
+    offset_days = next(p for p in get_op.parameters if p.name == "offset_days")
+    assert offset_days.required is False
+    assert offset_days.default == 0
 
 
 def test_form_encoded_request_body(tmp_path, form_encoded_spec):

@@ -444,8 +444,7 @@ class Spec:
             # Add enum and default if they exist in the schema
             if param.schema_.enum:
                 param_dict["enum"] = param.schema_.enum
-                param_dict["required"] = True
-            if param.schema_.default:
+            if param.schema_.default is not None:
                 param_dict["default"] = param.schema_.default
 
             # Add array sub-type information if needed.
