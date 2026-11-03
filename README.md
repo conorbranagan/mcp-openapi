@@ -298,3 +298,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 This project uses [aiopenapi3](https://github.com/commonism/aiopenapi3) for OpenAPI specification parsing and validation. Many thanks to the maintainers and contributors of that project for their excellent work.
+bot credential check
